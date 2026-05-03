@@ -110,7 +110,7 @@ const Modals = {
         const { error, data } = await DB.createNotebook(payload);
         err = error;
         if (!err && payload.is_public) {
-          await DB.logFeedEvent(Auth.user.id, 'new_notebook', { title: payload.title, id: data.id }, true);
+          await DB.logFeedEvent(Auth.user.id, 'new_notebook', { title: payload.title, id: data?.id }, true);
         }
       }
 
@@ -200,7 +200,7 @@ const Modals = {
       Modals.close();
       toast(isEdit ? 'Entry updated!' : 'Entry saved!');
       // Refresh notebook view
-      if (Router.params?.notebookId === notebookId) Views._openNotebook(Router.params.notebook);
+      if (Router.params?.notebookId === notebookId) Views._openNotebook(notebookId);
     });
   },
 

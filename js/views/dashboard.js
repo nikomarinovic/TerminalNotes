@@ -1,12 +1,22 @@
 /* ═══════════════════════════════════════════════
    views/dashboard.js
 ═══════════════════════════════════════════════ */
+
+/* Data registries for safe onclick handlers */
+Views._dashCmdRegistry = {};
+
 Views.dashboard = async function() {
   const uid = Auth.user.id;
   const [nb, cmd, ideas, proj] = await Promise.all([
     DB.getNotebooks(uid), DB.getCommands(uid),
     DB.getIdeas(uid),     DB.getProjects(uid),
   ]);
+
+  /* Populate registries */
+  Views._nbRegistry = Views._nbRegistry || {};
+  Views._dashCmdRegistry = {};
+  (nb.data || []).forEach(n => { Views._nbRegistry[n.id] = n; });
+  (cmd.data || []).forEach(c => { Views._dashCmdRegistry[c.id] = c; });
 
   const username = Auth.profile?.username || 'dev';
   const hour = new Date().getHours();
@@ -50,7 +60,7 @@ Views.dashboard = async function() {
         </div>
         <div class="card-list">
           ${(nb.data||[]).slice(0,4).map(n => `
-            <div class="card" style="cursor:pointer" onclick="Views._openNotebook(${JSON.stringify(JSON.stringify(n))})">
+            <div class="card" style="cursor:pointer" onclick="Views._openNotebook('${n.id}')">
               <div class="card-header">
                 <span class="card-title">📓 ${esc(n.title)}</span>
                 ${n.is_public ? '<span class="badge badge-green">public</span>' : '<span class="badge badge-gray">private</span>'}
@@ -93,7 +103,7 @@ Views.dashboard = async function() {
             <div class="card-header">
               <span class="card-title">${esc(c.title)}</span>
               <div style="display:flex;gap:6px">
-                <button class="btn-icon" onclick="Modals.command(${JSON.stringify(JSON.stringify(c))})" title="Edit">
+                <button class="btn-icon" onclick="Views._dashEditCmd('${c.id}')" title="Edit">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                 </button>
               </div>
@@ -102,7 +112,7 @@ Views.dashboard = async function() {
               <div class="cmd-block">
                 <div class="cmd-block-bar">
                   <div class="cmd-dots"><span></span><span></span><span></span></div>
-                  <button class="btn-copy" onclick="copyCmd(this,'${esc(c.command)}')">copy</button>
+                  <button class="btn-copy" onclick="copyCmd(this,${JSON.stringify(c.command)})">copy</button>
                 </div>
                 <div class="cmd-code"><span class="cmd-prompt">$</span>${esc(c.command)}</div>
               </div>
@@ -113,4 +123,9 @@ Views.dashboard = async function() {
       </div>
     </div>
   `);
+};
+
+Views._dashEditCmd = function(id) {
+  const c = Views._dashCmdRegistry[id];
+  if (c) Modals.command(c);
 };

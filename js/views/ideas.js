@@ -2,9 +2,14 @@
    views/ideas.js
 ═══════════════════════════════════════════════ */
 
+Views._ideaRegistry = {};
+
 Views.ideas = async function() {
   const { data: ideas, error } = await DB.getIdeas(Auth.user.id);
   if (error) { toast(error.message, 'error'); return; }
+
+  Views._ideaRegistry = {};
+  (ideas || []).forEach(i => { Views._ideaRegistry[i.id] = i; });
 
   const statuses = ['exploring','planning','building','done','parked'];
   const statusEmoji = { exploring:'💡', planning:'📐', building:'🔧', done:'✅', parked:'💤' };
@@ -39,7 +44,6 @@ Views.ideas = async function() {
 };
 
 Views._ideaCard = function(i) {
-  const iStr = JSON.stringify(JSON.stringify(i));
   const statusEmoji = { exploring:'💡', planning:'📐', building:'🔧', done:'✅', parked:'💤' };
   return `
     <div class="card idea-card" data-status="${esc(i.status)}" style="display:flex;flex-direction:column">
@@ -48,10 +52,10 @@ Views._ideaCard = function(i) {
         <span class="card-title">${esc(i.title)}</span>
         <div style="display:flex;gap:5px;margin-left:auto">
           ${i.is_public ? '<span class="badge badge-green">public</span>' : ''}
-          <button class="btn-icon" onclick="Modals.idea(JSON.parse(${iStr}))" title="Edit">
+          <button class="btn-icon" onclick="Views._editIdea('${i.id}')" title="Edit">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           </button>
-          <button class="btn-icon red" onclick="Modals.confirmDelete('${esc(i.title)}',()=>Views._deleteIdea('${i.id}'))" title="Delete">
+          <button class="btn-icon red" onclick="Views._confirmDeleteIdea('${i.id}')" title="Delete">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
           </button>
         </div>
@@ -68,7 +72,7 @@ Views._ideaCard = function(i) {
           <span class="idea-status status-${esc(i.status)}">${esc(i.status)}</span>
           <div style="display:flex;gap:6px">
             ${!i.converted_to_project ? `
-              <button class="btn btn-sm btn-secondary" onclick="Modals.promoteIdea(JSON.parse(${iStr}))" title="Promote to project">
+              <button class="btn btn-sm btn-secondary" onclick="Views._promoteIdea('${i.id}')">
                 🚀 → Project
               </button>
             ` : '<span class="badge badge-purple">converted</span>'}
@@ -78,6 +82,21 @@ Views._ideaCard = function(i) {
       </div>
     </div>
   `;
+};
+
+Views._editIdea = function(id) {
+  const i = Views._ideaRegistry[id];
+  if (i) Modals.idea(i);
+};
+
+Views._confirmDeleteIdea = function(id) {
+  const i = Views._ideaRegistry[id];
+  if (i) Modals.confirmDelete(i.title, () => Views._deleteIdea(id));
+};
+
+Views._promoteIdea = function(id) {
+  const i = Views._ideaRegistry[id];
+  if (i) Modals.promoteIdea(i);
 };
 
 Views._filterIdeas = function(btn, status) {

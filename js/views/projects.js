@@ -2,9 +2,14 @@
    views/projects.js
 ═══════════════════════════════════════════════ */
 
+Views._projRegistry = {};
+
 Views.projects = async function() {
   const { data: projects, error } = await DB.getProjects(Auth.user.id);
   if (error) { toast(error.message, 'error'); return; }
+
+  Views._projRegistry = {};
+  (projects || []).forEach(p => { Views._projRegistry[p.id] = p; });
 
   const statusColor = { planning:'badge-blue', 'in-progress':'badge-amber', paused:'badge-gray', done:'badge-green' };
   const statusEmoji = { planning:'📐', 'in-progress':'🔧', paused:'⏸', done:'✅' };
@@ -31,9 +36,8 @@ Views.projects = async function() {
 Views._projectCard = function(p, statusColor, statusEmoji) {
   const sc = statusColor || { planning:'badge-blue', 'in-progress':'badge-amber', paused:'badge-gray', done:'badge-green' };
   const se = statusEmoji  || { planning:'📐', 'in-progress':'🔧', paused:'⏸', done:'✅' };
-  const pStr = JSON.stringify(JSON.stringify(p));
   return `
-    <div class="card" style="cursor:pointer" onclick="Views._openProject(${pStr})">
+    <div class="card" style="cursor:pointer" onclick="Views._openProject('${p.id}')">
       <div class="card-header">
         <span style="font-size:1.1rem">${se[p.status]||'📐'}</span>
         <span class="card-title" style="font-size:1rem">${esc(p.title)}</span>
@@ -44,10 +48,10 @@ Views._projectCard = function(p, statusColor, statusEmoji) {
             <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.387.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 10.07 3.633 9.7 3.633 9.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.295 24 12c0-6.63-5.37-12-12-12"/></svg>
             GitHub
           </a>` : ''}
-          <button class="btn-icon" onclick="Modals.project(JSON.parse(${pStr}))" title="Edit">
+          <button class="btn-icon" onclick="Views._editProject('${p.id}')" title="Edit">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           </button>
-          <button class="btn-icon red" onclick="Modals.confirmDelete('${esc(p.title)}',()=>Views._deleteProject('${p.id}'),true)" title="Delete">
+          <button class="btn-icon red" onclick="Views._confirmDeleteProject('${p.id}')" title="Delete">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
           </button>
         </div>
@@ -62,13 +66,36 @@ Views._projectCard = function(p, statusColor, statusEmoji) {
   `;
 };
 
-Views._openProject = async function(p) {
-  if (typeof p === 'string') p = JSON.parse(p);
+Views._editProject = function(id) {
+  const p = Views._projRegistry[id];
+  if (p) Modals.project(p);
+};
+
+Views._confirmDeleteProject = function(id) {
+  const p = Views._projRegistry[id];
+  if (p) Modals.confirmDelete(p.title, () => Views._deleteProject(id), true);
+};
+
+Views._openProject = async function(idOrObj) {
+  let p;
+  if (typeof idOrObj === 'string' && idOrObj.length <= 36) {
+    p = Views._projRegistry[idOrObj];
+    if (!p) {
+      const { data } = await db.from('projects').select('*').eq('id', idOrObj).single();
+      p = data;
+    }
+  } else if (typeof idOrObj === 'object' && idOrObj !== null) {
+    p = idOrObj;
+  } else {
+    try { p = JSON.parse(idOrObj); } catch(e) { return; }
+  }
+  if (!p) { toast('Project not found', 'error'); return; }
+
+  Views._projRegistry[p.id] = p;
   Router.params = { project: p, projectId: p.id };
   UI.renderMain(UI.loading());
 
   const { data: milestones } = await DB.getMilestones(p.id);
-  const pStr = JSON.stringify(JSON.stringify(p));
 
   let reposHtml = '';
   if (Auth.githubToken && p.github_repo) {
@@ -92,14 +119,13 @@ Views._openProject = async function(p) {
         ${p.description ? `<p class="page-sub">${esc(p.description)}</p>` : ''}
       </div>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-secondary btn-sm" onclick="Modals.project(JSON.parse(${pStr}))">Edit</button>
+        <button class="btn btn-secondary btn-sm" onclick="Views._editProject('${p.id}')">Edit</button>
         <button class="btn btn-primary btn-sm" onclick="Modals.milestone('${p.id}')">+ Milestone</button>
       </div>
     </div>
 
     ${reposHtml}
 
-    <!-- Timeline -->
     <div style="margin:28px 0 20px">
       <div class="section-row">
         <div class="section-row-title">// timeline</div>
@@ -110,7 +136,6 @@ Views._openProject = async function(p) {
       </div>
     </div>
 
-    <!-- Notes / linked ideas tabs -->
     <div class="page-tabs" style="margin-top:24px">
       <button class="ptab active" onclick="Views._projectTab(this,'notes')">📝 Notes</button>
       <button class="ptab" onclick="Views._projectTab(this,'repos')">🔗 Repos</button>
@@ -121,7 +146,7 @@ Views._openProject = async function(p) {
     </div>
 
     <div style="margin-top:24px">
-      <button class="btn btn-danger btn-sm" onclick="Modals.confirmDelete('${esc(p.title)}',()=>Views._deleteProject('${p.id}'),true)">Delete project</button>
+      <button class="btn btn-danger btn-sm" onclick="Views._confirmDeleteProject('${p.id}')">Delete project</button>
     </div>
   `);
 };
@@ -211,7 +236,7 @@ Views._showRepos = async function() {
           <div class="repo-meta">
             ${r.language ? `<span class="repo-lang">● ${esc(r.language)}</span>` : ''}
             <span class="repo-stars">★ ${r.stargazers_count}</span>
-            <button class="btn btn-sm btn-ghost" onclick="Views._linkRepo('${esc(r.html_url)}')">Link to project</button>
+            <button class="btn btn-sm btn-ghost" onclick="Views._linkRepo(${JSON.stringify(r.html_url)})">Link to project</button>
           </div>
         </div>
       `).join('')}
@@ -226,7 +251,8 @@ Views._linkRepo = async function(url) {
   if (error) { toast(error.message, 'error'); return; }
   toast('Repository linked!');
   Router.params.project.github_repo = url;
-  Views._openProject(Router.params.project);
+  Views._projRegistry[p.id] = Router.params.project;
+  Views._openProject(p.id);
 };
 
 Views._deleteProject = async function(id) {
