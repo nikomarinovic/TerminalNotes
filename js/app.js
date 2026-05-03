@@ -2,8 +2,6 @@
    app.js — bootstrap + global event wiring
 ═══════════════════════════════════════════════ */
 
-/* Ensure Views namespace exists */
-const Views = window.Views || {};
 
 document.addEventListener('DOMContentLoaded', async () => {
 

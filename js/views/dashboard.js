@@ -1,8 +1,6 @@
 /* ═══════════════════════════════════════════════
    views/dashboard.js
 ═══════════════════════════════════════════════ */
-const Views = Views || {};
-
 Views.dashboard = async function() {
   const uid = Auth.user.id;
   const [nb, cmd, ideas, proj] = await Promise.all([
