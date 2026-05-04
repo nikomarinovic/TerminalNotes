@@ -323,7 +323,11 @@ const Modals = {
       let err;
       if (isEdit) ({ error: err } = await DB.updateIdea(existing.id, payload));
       else        ({ error: err } = await DB.createIdea(payload));
-      if (err) { toast(err.message, 'error'); btn.disabled = false; return; }
+      if (err) {
+        toast(err.message || 'Failed to save idea', 'error');
+        btn.disabled = false;
+        return;
+      }
       Modals.close();
       toast(isEdit ? 'Idea updated!' : 'Idea saved!');
       Views.ideas();
@@ -426,12 +430,18 @@ const Modals = {
       </div>
     `);
     document.getElementById('btn-prj-save').addEventListener('click', async () => {
+      const rawRepo = document.getElementById('prj-repo').value.trim();
+      const normalizedRepo = rawRepo ? normalizeUrl(rawRepo) : '';
+      if (rawRepo && !normalizedRepo) {
+        toast('GitHub link is not valid', 'error');
+        return;
+      }
       const payload = {
         user_id:     Auth.user.id,
         title:       document.getElementById('prj-title').value.trim(),
         description: document.getElementById('prj-desc').value.trim(),
         status:      document.getElementById('prj-status').value,
-        github_repo: document.getElementById('prj-repo').value.trim(),
+        github_repo: normalizedRepo,
         is_public:   document.getElementById('prj-public').checked,
       };
       if (!payload.title) { toast('Title required', 'error'); return; }

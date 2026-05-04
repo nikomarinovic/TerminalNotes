@@ -35,19 +35,19 @@ Views.dashboard = async function() {
     <div class="stats-row">
       <div class="stat-card" style="cursor:pointer" onclick="Router.navigate('notebooks')">
         <div class="stat-num">${(nb.data||[]).length}</div>
-        <div class="stat-label">📓 notebooks</div>
+        <div class="stat-label">${Icons.svg('notebook','ui-icon')} notebooks</div>
       </div>
       <div class="stat-card" style="cursor:pointer" onclick="Router.navigate('commands')">
         <div class="stat-num">${(cmd.data||[]).length}</div>
-        <div class="stat-label">$_ commands</div>
+        <div class="stat-label">${Icons.svg('command','ui-icon')} commands</div>
       </div>
       <div class="stat-card" style="cursor:pointer" onclick="Router.navigate('ideas')">
         <div class="stat-num">${(ideas.data||[]).length}</div>
-        <div class="stat-label">💡 ideas</div>
+        <div class="stat-label">${Icons.svg('idea','ui-icon')} ideas</div>
       </div>
       <div class="stat-card" style="cursor:pointer" onclick="Router.navigate('projects')">
         <div class="stat-num">${(proj.data||[]).length}</div>
-        <div class="stat-label">🚀 projects</div>
+        <div class="stat-label">${Icons.svg('project','ui-icon')} projects</div>
       </div>
     </div>
 
@@ -62,7 +62,7 @@ Views.dashboard = async function() {
           ${(nb.data||[]).slice(0,4).map(n => `
             <div class="card" style="cursor:pointer" onclick="Views._openNotebook('${n.id}')">
               <div class="card-header">
-                <span class="card-title">📓 ${esc(n.title)}</span>
+                <span class="card-title">${Icons.svg('notebook','ui-icon')} ${esc(n.title)}</span>
                 ${n.is_public ? '<span class="badge badge-green">public</span>' : '<span class="badge badge-gray">private</span>'}
               </div>
               ${n.description ? `<div class="card-body"><p style="font-size:.85rem;color:var(--text-2)">${esc(n.description)}</p></div>` : ''}
@@ -81,7 +81,7 @@ Views.dashboard = async function() {
           ${(ideas.data||[]).slice(0,4).map(i => `
             <div class="card">
               <div class="card-header">
-                <span class="card-title">💡 ${esc(i.title)}</span>
+                <span class="card-title">${Icons.svg('idea','ui-icon')} ${esc(i.title)}</span>
                 <span class="idea-status status-${esc(i.status)}">${esc(i.status)}</span>
               </div>
               ${i.description ? `<div class="card-body"><p style="font-size:.85rem;color:var(--text-2);line-height:1.55">${esc(i.description.substring(0,100))}${i.description.length>100?'…':''}</p></div>` : ''}

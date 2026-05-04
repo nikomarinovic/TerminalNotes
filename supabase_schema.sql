@@ -16,6 +16,17 @@ create table if not exists public.profiles (
 );
 
 -- ─────────────────────────────────────────────
+-- 1b. USERS (social profile alias table)
+-- ─────────────────────────────────────────────
+create table if not exists public.users (
+  id          uuid primary key references auth.users(id) on delete cascade,
+  username    text unique not null,
+  avatar_url  text,
+  bio         text,
+  created_at  timestamptz default now()
+);
+
+-- ─────────────────────────────────────────────
 -- 2. NOTEBOOKS
 -- ─────────────────────────────────────────────
 create table if not exists public.notebooks (
@@ -135,6 +146,32 @@ create table if not exists public.feed_events (
 );
 
 -- ─────────────────────────────────────────────
+-- 10b. POSTS (social feed)
+-- ─────────────────────────────────────────────
+create table if not exists public.posts (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references auth.users(id) on delete cascade,
+  content    text not null check (char_length(content) > 0 and char_length(content) <= 500),
+  image_url  text,
+  created_at timestamptz default now()
+);
+
+create table if not exists public.post_likes (
+  user_id    uuid not null references auth.users(id) on delete cascade,
+  post_id    uuid not null references public.posts(id) on delete cascade,
+  created_at timestamptz default now(),
+  primary key (user_id, post_id)
+);
+
+create table if not exists public.post_comments (
+  id         uuid primary key default gen_random_uuid(),
+  post_id    uuid not null references public.posts(id) on delete cascade,
+  user_id    uuid not null references auth.users(id) on delete cascade,
+  content    text not null check (char_length(content) > 0 and char_length(content) <= 500),
+  created_at timestamptz default now()
+);
+
+-- ─────────────────────────────────────────────
 -- 11. INDEXES
 -- ─────────────────────────────────────────────
 create index if not exists notebooks_user_id_idx   on public.notebooks(user_id);
@@ -150,6 +187,10 @@ create index if not exists stars_user_id_idx       on public.stars(user_id);
 create index if not exists follows_follower_idx    on public.follows(follower_id);
 create index if not exists follows_following_idx   on public.follows(following_id);
 create index if not exists feed_public_idx         on public.feed_events(is_public, created_at desc) where is_public = true;
+create index if not exists posts_created_idx       on public.posts(created_at desc);
+create index if not exists posts_user_idx          on public.posts(user_id, created_at desc);
+create index if not exists post_likes_post_idx     on public.post_likes(post_id);
+create index if not exists post_comments_post_idx  on public.post_comments(post_id, created_at asc);
 
 -- ─────────────────────────────────────────────
 -- 12. ROW LEVEL SECURITY — enable on all tables
@@ -164,6 +205,70 @@ alter table public.milestones  enable row level security;
 alter table public.stars       enable row level security;
 alter table public.follows     enable row level security;
 alter table public.feed_events enable row level security;
+alter table public.users       enable row level security;
+alter table public.posts       enable row level security;
+alter table public.post_likes  enable row level security;
+alter table public.post_comments enable row level security;
+
+-- ─────────────────────────────────────────────
+-- Drop existing policies (safe re-run)
+-- ─────────────────────────────────────────────
+drop policy if exists "Profiles are publicly viewable" on public.profiles;
+drop policy if exists "Users can insert own profile" on public.profiles;
+drop policy if exists "Users can update own profile" on public.profiles;
+
+drop policy if exists "Users table is publicly viewable" on public.users;
+drop policy if exists "Users can insert own users row" on public.users;
+drop policy if exists "Users can update own users row" on public.users;
+
+drop policy if exists "Users view own + public notebooks" on public.notebooks;
+drop policy if exists "Users insert own notebooks" on public.notebooks;
+drop policy if exists "Users update own notebooks" on public.notebooks;
+drop policy if exists "Users delete own notebooks" on public.notebooks;
+
+drop policy if exists "Users view own entries" on public.entries;
+drop policy if exists "Users insert own entries" on public.entries;
+drop policy if exists "Users update own entries" on public.entries;
+drop policy if exists "Users delete own entries" on public.entries;
+
+drop policy if exists "Users view own + public commands" on public.commands;
+drop policy if exists "Users insert own commands" on public.commands;
+drop policy if exists "Users update own commands" on public.commands;
+drop policy if exists "Users delete own commands" on public.commands;
+
+drop policy if exists "Users view own + public ideas" on public.ideas;
+drop policy if exists "Users insert own ideas" on public.ideas;
+drop policy if exists "Users update own ideas" on public.ideas;
+drop policy if exists "Users delete own ideas" on public.ideas;
+
+drop policy if exists "Users view own + public projects" on public.projects;
+drop policy if exists "Users insert own projects" on public.projects;
+drop policy if exists "Users update own projects" on public.projects;
+drop policy if exists "Users delete own projects" on public.projects;
+
+drop policy if exists "Milestone owners can view" on public.milestones;
+drop policy if exists "Users insert own milestones" on public.milestones;
+drop policy if exists "Users delete own milestones" on public.milestones;
+
+drop policy if exists "Users manage own stars" on public.stars;
+
+drop policy if exists "Users manage own follows" on public.follows;
+drop policy if exists "Follows are publicly viewable" on public.follows;
+
+drop policy if exists "Public feed is viewable by all" on public.feed_events;
+drop policy if exists "Users insert own feed events" on public.feed_events;
+drop policy if exists "Users delete own feed events" on public.feed_events;
+
+drop policy if exists "Posts are publicly readable" on public.posts;
+drop policy if exists "Users can create own posts" on public.posts;
+drop policy if exists "Users can delete own posts" on public.posts;
+
+drop policy if exists "Post likes are publicly readable" on public.post_likes;
+drop policy if exists "Users manage own post likes" on public.post_likes;
+
+drop policy if exists "Post comments are publicly readable" on public.post_comments;
+drop policy if exists "Users create own post comments" on public.post_comments;
+drop policy if exists "Users delete own post comments" on public.post_comments;
 
 -- ─────────────────────────────────────────────
 -- 13. RLS POLICIES — profiles
@@ -176,6 +281,15 @@ create policy "Users can insert own profile"
 
 create policy "Users can update own profile"
   on public.profiles for update using (auth.uid() = id);
+
+create policy "Users table is publicly viewable"
+  on public.users for select using (true);
+
+create policy "Users can insert own users row"
+  on public.users for insert with check (auth.uid() = id);
+
+create policy "Users can update own users row"
+  on public.users for update using (auth.uid() = id);
 
 -- ─────────────────────────────────────────────
 -- 14. RLS POLICIES — notebooks
@@ -316,6 +430,33 @@ create policy "Users delete own feed events"
   on public.feed_events for delete using (auth.uid() = user_id);
 
 -- ─────────────────────────────────────────────
+-- 24. RLS POLICIES — social posts
+-- ─────────────────────────────────────────────
+create policy "Posts are publicly readable"
+  on public.posts for select using (true);
+
+create policy "Users can create own posts"
+  on public.posts for insert with check (auth.uid() = user_id);
+
+create policy "Users can delete own posts"
+  on public.posts for delete using (auth.uid() = user_id);
+
+create policy "Post likes are publicly readable"
+  on public.post_likes for select using (true);
+
+create policy "Users manage own post likes"
+  on public.post_likes for all using (auth.uid() = user_id);
+
+create policy "Post comments are publicly readable"
+  on public.post_comments for select using (true);
+
+create policy "Users create own post comments"
+  on public.post_comments for insert with check (auth.uid() = user_id);
+
+create policy "Users delete own post comments"
+  on public.post_comments for delete using (auth.uid() = user_id);
+
+-- ─────────────────────────────────────────────
 -- 23. AUTO-CREATE PROFILE ON SIGNUP (trigger)
 -- ─────────────────────────────────────────────
 create or replace function public.handle_new_user()
@@ -327,6 +468,15 @@ begin
     coalesce(new.raw_user_meta_data->>'user_name', split_part(new.email, '@', 1)),
     coalesce(new.raw_user_meta_data->>'full_name', ''),
     coalesce(new.raw_user_meta_data->>'avatar_url', '')
+  )
+  on conflict (id) do nothing;
+
+  insert into public.users (id, username, avatar_url, bio)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'user_name', split_part(new.email, '@', 1)),
+    coalesce(new.raw_user_meta_data->>'avatar_url', ''),
+    ''
   )
   on conflict (id) do nothing;
   return new;

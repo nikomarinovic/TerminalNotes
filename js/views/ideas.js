@@ -12,7 +12,7 @@ Views.ideas = async function() {
   (ideas || []).forEach(i => { Views._ideaRegistry[i.id] = i; });
 
   const statuses = ['exploring','planning','building','done','parked'];
-  const statusEmoji = { exploring:'💡', planning:'📐', building:'🔧', done:'✅', parked:'💤' };
+  const statusEmoji = { exploring:Icons.svg('idea','ui-icon'), planning:Icons.svg('settings','ui-icon'), building:Icons.svg('command','ui-icon'), done:Icons.svg('project','ui-icon'), parked:Icons.svg('comment','ui-icon') };
 
   UI.renderMain(`
     <div class="page-header">
@@ -33,7 +33,7 @@ Views.ideas = async function() {
     </div>
 
     ${!ideas?.length
-      ? UI.empty('💡', 'No ideas yet', 'Capture your first idea — every great project starts with a spark.', '+ New Idea', 'Modals.idea()')
+      ? UI.empty(Icons.svg('idea','ui-icon'), 'No ideas yet', 'Capture your first idea — every great project starts with a spark.', '+ New Idea', 'Modals.idea()')
       : `<div class="grid-2" id="ideas-grid">
           ${(ideas||[]).map(i => Views._ideaCard(i)).join('')}
         </div>`
@@ -44,7 +44,7 @@ Views.ideas = async function() {
 };
 
 Views._ideaCard = function(i) {
-  const statusEmoji = { exploring:'💡', planning:'📐', building:'🔧', done:'✅', parked:'💤' };
+  const statusEmoji = { exploring:Icons.svg('idea','ui-icon'), planning:Icons.svg('settings','ui-icon'), building:Icons.svg('command','ui-icon'), done:Icons.svg('project','ui-icon'), parked:Icons.svg('comment','ui-icon') };
   return `
     <div class="card idea-card" data-status="${esc(i.status)}" style="display:flex;flex-direction:column">
       <div class="card-header">

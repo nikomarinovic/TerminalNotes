@@ -3,6 +3,9 @@
 ═══════════════════════════════════════════════ */
 
 Views._cmdRegistry = {};
+Views._cmdFiltered = [];
+Views._cmdPage = 0;
+const CMD_PAGE_SIZE = 5;
 
 Views.commands = async function() {
   const { data: commands, error } = await DB.getCommands(Auth.user.id);
@@ -10,13 +13,6 @@ Views.commands = async function() {
 
   Views._cmdRegistry = {};
   (commands || []).forEach(c => { Views._cmdRegistry[c.id] = c; });
-
-  const grouped = {};
-  (commands || []).forEach(c => {
-    const key = (c.tags && c.tags[0]) ? c.tags[0] : 'general';
-    if (!grouped[key]) grouped[key] = [];
-    grouped[key].push(c);
-  });
 
   UI.renderMain(`
     <div class="page-header">
@@ -33,25 +29,13 @@ Views.commands = async function() {
       <span style="font-family:var(--font-mono);font-size:.78rem;color:var(--text-3)">${(commands||[]).length} total</span>
     </div>
 
-    <div id="cmd-list">
-      ${!commands?.length
-        ? UI.empty('$_', 'No commands yet', 'Save your first command to start building your personal cheatsheet.', '+ New Command', 'Modals.command()')
-        : Object.entries(grouped).map(([group, cmds]) => `
-          <div class="cmd-group" data-group="${esc(group)}" style="margin-bottom:28px">
-            <div class="section-row">
-              <div class="section-row-title">// ${esc(group)}</div>
-              <span style="font-family:var(--font-mono);font-size:.72rem;color:var(--text-3)">${cmds.length} command${cmds.length!==1?'s':''}</span>
-            </div>
-            <div class="card-list">
-              ${cmds.map(c => Views._commandCard(c)).join('')}
-            </div>
-          </div>
-        `).join('')
-      }
-    </div>
+    <div id="cmd-list"></div>
   `);
 
   Views._allCommands = commands || [];
+  Views._cmdFiltered = commands || [];
+  Views._cmdPage = 0;
+  Views._renderCommandsPage();
 };
 
 Views._commandCard = function(c) {
@@ -95,14 +79,49 @@ Views._confirmDeleteCmd = function(id) {
 };
 
 Views._filterCmds = function(query) {
-  const q = query.toLowerCase();
-  document.querySelectorAll('.cmd-card').forEach(el => {
-    el.style.display = !q || el.dataset.search.includes(q) ? '' : 'none';
+  const q = query.toLowerCase().trim();
+  Views._cmdFiltered = (Views._allCommands || []).filter(c => {
+    const haystack = `${c.title || ''} ${c.command || ''} ${(c.tags || []).join(' ')}`.toLowerCase();
+    return !q || haystack.includes(q);
   });
-  document.querySelectorAll('.cmd-group').forEach(g => {
-    const visible = [...g.querySelectorAll('.cmd-card')].some(c => c.style.display !== 'none');
-    g.style.display = visible ? '' : 'none';
-  });
+  Views._cmdPage = 0;
+  Views._renderCommandsPage();
+};
+
+Views._changeCmdPage = function(dir) {
+  const totalPages = Math.max(1, Math.ceil((Views._cmdFiltered || []).length / CMD_PAGE_SIZE));
+  Views._cmdPage = Math.max(0, Math.min(totalPages - 1, Views._cmdPage + dir));
+  Views._renderCommandsPage();
+};
+
+Views._renderCommandsPage = function() {
+  const list = document.getElementById('cmd-list');
+  if (!list) return;
+  const items = Views._cmdFiltered || [];
+  if (!items.length) {
+    list.innerHTML = UI.empty(Icons.svg('command','ui-icon'), 'No commands found', 'Try another filter or add a new command.', '+ New Command', 'Modals.command()');
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(items.length / CMD_PAGE_SIZE));
+  const page = Math.min(Views._cmdPage, totalPages - 1);
+  Views._cmdPage = page;
+  const pageItems = items.slice(page * CMD_PAGE_SIZE, (page + 1) * CMD_PAGE_SIZE);
+
+  list.innerHTML = `
+    <div class="section-row">
+      <div class="section-row-title">Commands</div>
+      <span style="font-family:var(--font-mono);font-size:.72rem;color:var(--text-3)">page ${page + 1} / ${totalPages}</span>
+    </div>
+    <div class="card-list">
+      ${pageItems.map(c => Views._commandCard(c)).join('')}
+    </div>
+    <div class="nb-pagination">
+      <button class="nb-page-btn" onclick="Views._changeCmdPage(-1)" ${page === 0 ? 'disabled' : ''}>← prethodna stranica</button>
+      <span class="nb-page-info">${page + 1} / ${totalPages}</span>
+      <button class="nb-page-btn" onclick="Views._changeCmdPage(1)" ${page >= totalPages - 1 ? 'disabled' : ''}>sljedeća stranica →</button>
+    </div>
+  `;
 };
 
 Views._deleteCmd = async function(id) {

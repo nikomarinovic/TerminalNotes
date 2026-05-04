@@ -12,7 +12,7 @@ Views.projects = async function() {
   (projects || []).forEach(p => { Views._projRegistry[p.id] = p; });
 
   const statusColor = { planning:'badge-blue', 'in-progress':'badge-amber', paused:'badge-gray', done:'badge-green' };
-  const statusEmoji = { planning:'📐', 'in-progress':'🔧', paused:'⏸', done:'✅' };
+  const statusEmoji = { planning:Icons.svg('settings','ui-icon'), 'in-progress':Icons.svg('command','ui-icon'), paused:Icons.svg('comment','ui-icon'), done:Icons.svg('project','ui-icon') };
 
   UI.renderMain(`
     <div class="page-header">
@@ -25,7 +25,7 @@ Views.projects = async function() {
     </div>
 
     ${!projects?.length
-      ? UI.empty('🚀', 'No projects yet', 'Create a project or promote an idea to get started.', '+ New Project', 'Modals.project()')
+      ? UI.empty(Icons.svg('project','ui-icon'), 'No projects yet', 'Create a project or promote an idea to get started.', '+ New Project', 'Modals.project()')
       : `<div class="card-list" id="projects-list">
           ${(projects||[]).map(p => Views._projectCard(p, statusColor, statusEmoji)).join('')}
         </div>`
@@ -35,7 +35,7 @@ Views.projects = async function() {
 
 Views._projectCard = function(p, statusColor, statusEmoji) {
   const sc = statusColor || { planning:'badge-blue', 'in-progress':'badge-amber', paused:'badge-gray', done:'badge-green' };
-  const se = statusEmoji  || { planning:'📐', 'in-progress':'🔧', paused:'⏸', done:'✅' };
+  const se = statusEmoji  || { planning:Icons.svg('settings','ui-icon'), 'in-progress':Icons.svg('command','ui-icon'), paused:Icons.svg('comment','ui-icon'), done:Icons.svg('project','ui-icon') };
   return `
     <div class="card" style="cursor:pointer" onclick="Views._openProject('${p.id}')">
       <div class="card-header">
@@ -93,20 +93,8 @@ Views._openProject = async function(idOrObj) {
 
   Views._projRegistry[p.id] = p;
   Router.params = { project: p, projectId: p.id };
-  UI.renderMain(UI.loading());
 
-  const { data: milestones } = await DB.getMilestones(p.id);
-
-  let reposHtml = '';
-  if (Auth.githubToken && p.github_repo) {
-    reposHtml = `
-      <div style="background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px 18px;margin-top:16px">
-        <div style="font-family:var(--font-mono);font-size:.75rem;color:var(--text-3);margin-bottom:8px">// connected repo</div>
-        <a href="${esc(p.github_repo)}" target="_blank" class="repo-name">${esc(p.github_repo.replace('https://github.com/',''))}</a>
-      </div>
-    `;
-  }
-
+  /* Render shell immediately */
   UI.renderMain(`
     <div style="margin-bottom:12px">
       <button class="btn btn-ghost btn-sm" onclick="Views.projects()">← back to projects</button>
@@ -124,16 +112,19 @@ Views._openProject = async function(idOrObj) {
       </div>
     </div>
 
-    ${reposHtml}
+    ${p.github_repo ? `
+      <div style="background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 18px;margin-bottom:20px;display:flex;align-items:center;gap:10px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--text-3)"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.387.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 10.07 3.633 9.7 3.633 9.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.295 24 12c0-6.63-5.37-12-12-12"/></svg>
+        <a href="${esc(p.github_repo)}" target="_blank" style="font-family:var(--font-mono);font-size:.85rem;color:var(--blue)">${esc(p.github_repo.replace('https://github.com/',''))}</a>
+      </div>
+    ` : ''}
 
-    <div style="margin:28px 0 20px">
+    <div style="margin:0 0 20px">
       <div class="section-row">
         <div class="section-row-title">// timeline</div>
         <button class="btn btn-ghost btn-sm" onclick="Modals.milestone('${p.id}')">+ add milestone</button>
       </div>
-      <div id="timeline-wrap">
-        ${Views._buildTimeline(milestones || [])}
-      </div>
+      <div id="timeline-wrap" style="font-family:var(--font-mono);font-size:.8rem;color:var(--text-3);padding:16px 0">Loading timeline...</div>
     </div>
 
     <div class="page-tabs" style="margin-top:24px">
@@ -149,6 +140,11 @@ Views._openProject = async function(idOrObj) {
       <button class="btn btn-danger btn-sm" onclick="Views._confirmDeleteProject('${p.id}')">Delete project</button>
     </div>
   `);
+
+  /* Fetch milestones after render */
+  const { data: milestones } = await DB.getMilestones(p.id);
+  const tw = document.getElementById('timeline-wrap');
+  if (tw) tw.innerHTML = Views._buildTimeline(milestones || []);
 };
 
 Views._buildTimeline = function(milestones) {
@@ -210,24 +206,64 @@ Views._projectTab = function(btn, tab) {
     content.innerHTML = `
       <div class="card" style="margin-top:8px">
         <div class="card-body" style="padding:18px">
-          ${p.github_repo
-            ? `<div class="repo-card"><div class="repo-name">${esc(p.github_repo)}</div></div>`
-            : `<p style="font-size:.9rem;color:var(--text-2)">No repository linked. Edit the project to add a GitHub repo URL.</p>`}
-          ${Auth.githubToken ? `<button class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="Views._showRepos()">Browse my repos</button>` : ''}
-          <div id="repos-list" style="margin-top:14px"></div>
+          <div style="font-family:var(--font-mono);font-size:.78rem;color:var(--text-3);margin-bottom:12px">// link github repository</div>
+          ${p.github_repo ? `
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:10px 12px;background:var(--bg-3);border-radius:var(--r);border:1px solid var(--border)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--text-2)"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.387.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 10.07 3.633 9.7 3.633 9.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.295 24 12c0-6.63-5.37-12-12-12"/></svg>
+              <a href="${esc(p.github_repo)}" target="_blank" style="font-family:var(--font-mono);font-size:.85rem;color:var(--blue);flex:1">${esc(p.github_repo.replace('https://github.com/',''))}</a>
+              <button class="btn btn-ghost btn-sm" onclick="Views._unlinkRepo('${p.id}')">unlink</button>
+            </div>
+          ` : ''}
+          <div style="display:flex;gap:8px;align-items:center">
+            <input id="repo-url-input" class="form-input mono" style="flex:1" 
+              placeholder="https://github.com/username/repo"
+              value="${esc(p.github_repo||'')}"
+              onkeydown="if(event.key==='Enter')Views._saveRepoUrl('${p.id}')"/>
+            <button class="btn btn-primary btn-sm" onclick="Views._saveRepoUrl('${p.id}')">Save</button>
+          </div>
+          ${Auth.githubToken ? `
+            <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">
+              <button class="btn btn-secondary btn-sm" onclick="Views._showRepos()">Browse my GitHub repos</button>
+              <div id="repos-list" style="margin-top:12px"></div>
+            </div>
+          ` : ''}
         </div>
       </div>
     `;
   }
 };
 
+Views._saveRepoUrl = async function(projectId) {
+  const url = normalizeUrl(document.getElementById('repo-url-input')?.value.trim());
+  if (!url) { toast('Enter a valid repo URL', 'error'); return; }
+  const { error } = await DB.updateProject(projectId, { github_repo: url });
+  if (error) { toast(error.message, 'error'); return; }
+  toast('Repository saved!');
+  const p = Views._projRegistry[projectId];
+  if (p) { p.github_repo = url; Router.params.project = p; }
+  Views._openProject(projectId);
+};
+
+Views._unlinkRepo = async function(projectId) {
+  const { error } = await DB.updateProject(projectId, { github_repo: '' });
+  if (error) { toast(error.message, 'error'); return; }
+  toast('Repository unlinked');
+  const p = Views._projRegistry[projectId];
+  if (p) { p.github_repo = ''; Router.params.project = p; }
+  Views._openProject(projectId);
+};
+
 Views._showRepos = async function() {
   const el = document.getElementById('repos-list');
   el.innerHTML = '<div class="loading-page"><div class="spinner"></div> Loading repos...</div>';
-  const repos = await DB.getGithubRepos(Auth.githubToken);
+  const { data: repos, error, source } = await DB.getGithubRepos(Auth.githubToken);
+  if (error) {
+    el.innerHTML = `<p style="color:var(--red);font-size:.85rem">${esc(error)}</p>`;
+    return;
+  }
   if (!repos.length) { el.innerHTML = '<p style="color:var(--text-3);font-size:.85rem">No repos found.</p>'; return; }
   el.innerHTML = `
-    <div class="section-row-title" style="margin-bottom:10px">// your repositories</div>
+    <div class="section-row-title" style="margin-bottom:10px">// your repositories (${source === 'cache' ? 'cached' : 'live'})</div>
     <div class="grid-2">
       ${repos.slice(0,12).map(r => `
         <div class="repo-card">
@@ -247,10 +283,12 @@ Views._showRepos = async function() {
 Views._linkRepo = async function(url) {
   const p = Router.params?.project;
   if (!p) return;
-  const { error } = await DB.updateProject(p.id, { github_repo: url });
+  const safeUrl = normalizeUrl(url);
+  if (!safeUrl) { toast('Invalid GitHub URL', 'error'); return; }
+  const { error } = await DB.updateProject(p.id, { github_repo: safeUrl });
   if (error) { toast(error.message, 'error'); return; }
   toast('Repository linked!');
-  Router.params.project.github_repo = url;
+  Router.params.project.github_repo = safeUrl;
   Views._projRegistry[p.id] = Router.params.project;
   Views._openProject(p.id);
 };

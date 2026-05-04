@@ -24,11 +24,13 @@ const Router = {
 
     const view = this.views[name];
     if (view) {
-      UI.renderMain(UI.loading());
-      view();
+      /* Don't let runtime errors freeze sidebar navigation */
+      Promise.resolve(view()).catch(err => {
+        console.error('View render failed:', name, err);
+        toast('Failed to open view. Try again.', 'error');
+      });
     }
 
-    // Close sidebar on mobile after navigation
-    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebar')?.classList.remove('open');
   }
 };

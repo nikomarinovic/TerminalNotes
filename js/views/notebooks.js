@@ -2,10 +2,20 @@
    views/notebooks.js
 ═══════════════════════════════════════════════ */
 
-/* Safe data registry — avoids inline JSON escaping bugs */
-Views._nbRegistry = {};
+Views._nbRegistry    = {};
 Views._entryRegistry = {};
+Views._nbPages       = {}; /* { sectionType: currentPage } */
 
+const NB_PAGE_SIZE = 5; /* entries per section page */
+
+Views._spineColor = function(id) {
+  const colors = ['#00c896','#4da9ff','#b48eff','#f5a623','#26d0ce','#94a3b8'];
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = id.charCodeAt(i) + ((h << 5) - h);
+  return colors[Math.abs(h) % colors.length];
+};
+
+/* ─── Notebooks list ─── */
 Views.notebooks = async function() {
   const { data: notebooks, error } = await DB.getNotebooks(Auth.user.id);
   if (error) { toast(error.message, 'error'); return; }
@@ -22,169 +32,235 @@ Views.notebooks = async function() {
       </div>
       <button class="btn btn-primary" onclick="Modals.notebook()">+ New Notebook</button>
     </div>
-
     ${!notebooks?.length
-      ? UI.empty('📓', 'No notebooks yet', 'Create your first notebook to start organising your developer knowledge.', '+ New Notebook', 'Modals.notebook()')
-      : `<div class="grid-2" id="notebook-grid">
-          ${notebooks.map(nb => Views._notebookCard(nb)).join('')}
-        </div>`
+      ? UI.empty('📓', 'No notebooks yet', 'Create your first notebook.', '+ New Notebook', 'Modals.notebook()')
+      : `<div class="nb-grid">${notebooks.map(nb => Views._notebookCard(nb)).join('')}</div>`
     }
   `);
 };
 
 Views._notebookCard = function(nb) {
   return `
-    <div class="notebook-page" style="position:relative;cursor:pointer" onclick="Views._openNotebook('${nb.id}')">
-      <div style="position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--accent);border-radius:12px 0 0 12px;"></div>
-      <div class="notebook-page-header" style="padding-left:22px">
-        <div>
-          <div style="font-family:var(--font-mono);font-size:.7rem;color:var(--accent);margin-bottom:4px">// notebook</div>
-          <div style="font-family:var(--font-display);font-size:1.2rem;font-weight:400;color:var(--text)">${esc(nb.title)}</div>
-          ${nb.description ? `<div style="font-size:.82rem;color:var(--text-2);margin-top:4px">${esc(nb.description)}</div>` : ''}
+    <div class="nb-book" onclick="Views._openNotebook('${nb.id}')">
+      <div class="nb-book-cover">
+        <div class="nb-book-cover-inner">
+          <div class="nb-book-label">// notebook</div>
+          <div class="nb-book-title">${esc(nb.title)}</div>
+          ${nb.description ? `<div class="nb-book-desc">${esc(nb.description)}</div>` : ''}
         </div>
-        <div style="display:flex;gap:6px;align-items:center" onclick="event.stopPropagation()">
-          ${nb.is_public ? '<span class="badge badge-green">public</span>' : '<span class="badge badge-gray">private</span>'}
-          <button class="btn-icon" onclick="Views._editNotebook('${nb.id}')" title="Edit">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          </button>
-          <button class="btn-icon red" onclick="Views._confirmDeleteNotebook('${nb.id}')" title="Delete">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-          </button>
+        <div class="nb-book-footer">
+          <span class="nb-date">${reltime(nb.created_at)}</span>
+          <div style="display:flex;gap:5px;align-items:center">
+            ${nb.is_public ? '<span class="badge badge-green">public</span>' : '<span class="badge badge-gray">private</span>'}
+            <div class="nb-book-actions" onclick="event.stopPropagation()">
+              <button class="btn-icon" onclick="Views._editNotebook('${nb.id}')" title="Edit">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+              <button class="btn-icon red" onclick="Views._confirmDeleteNotebook('${nb.id}')" title="Delete">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
-      <div class="notebook-page-body" style="padding-left:22px">
-        <p style="font-family:var(--font-mono);font-size:.75rem;color:var(--text-3)">
-          created ${reltime(nb.created_at)} · click to open
-        </p>
-      </div>
-    </div>
-  `;
+    </div>`;
 };
 
-Views._editNotebook = function(id) {
-  const nb = Views._nbRegistry[id];
-  if (nb) Modals.notebook(nb);
-};
-
+Views._editNotebook = function(id) { const nb = Views._nbRegistry[id]; if (nb) Modals.notebook(nb); };
 Views._confirmDeleteNotebook = function(id) {
   const nb = Views._nbRegistry[id];
   if (nb) Modals.confirmDelete(nb.title, () => Views._deleteNotebook(id), true);
 };
 
+/* ─── Open notebook ─── */
 Views._openNotebook = async function(idOrObj) {
   let nb;
   if (typeof idOrObj === 'string' && idOrObj.length <= 36) {
     nb = Views._nbRegistry[idOrObj];
-    if (!nb) {
-      const { data } = await db.from('notebooks').select('*').eq('id', idOrObj).single();
-      nb = data;
-    }
+    if (!nb) { const { data } = await db.from('notebooks').select('*').eq('id', idOrObj).single(); nb = data; }
   } else if (typeof idOrObj === 'object' && idOrObj !== null) {
     nb = idOrObj;
-  } else {
-    try { nb = JSON.parse(idOrObj); } catch(e) { return; }
-  }
+  } else { try { nb = JSON.parse(idOrObj); } catch(e) { return; } }
   if (!nb) { toast('Notebook not found', 'error'); return; }
 
   Views._nbRegistry[nb.id] = nb;
   Router.params = { notebook: nb, notebookId: nb.id };
-  UI.renderMain(UI.loading());
 
+  /* Render shell immediately — no loading flash */
+  const color = Views._spineColor(nb.id);
+  UI.renderMain(`
+    <button class="btn btn-ghost btn-sm" onclick="Views.notebooks()" style="margin-bottom:20px">← back to notebooks</button>
+    <div class="nb-page-wrap">
+      <div class="nb-page-inner">
+        <div class="nb-page-title-area">
+          <div>
+            <div style="font-family:var(--font-mono);font-size:.7rem;color:${color};margin-bottom:6px;opacity:.8">~/notebooks/${esc(nb.title)}</div>
+            <h1 class="nb-page-heading">${esc(nb.title)}</h1>
+            ${nb.description ? `<p class="nb-page-subheading">${esc(nb.description)}</p>` : ''}
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="Modals.entry('${nb.id}')">+ Add Entry</button>
+        </div>
+        <div class="nb-page-tabs">
+          <button class="nb-ptab active" onclick="Views._filterEntries(this,'all')">all</button>
+          <button class="nb-ptab" onclick="Views._filterEntries(this,'note')">notes</button>
+          <button class="nb-ptab" onclick="Views._filterEntries(this,'command')">commands</button>
+          <button class="nb-ptab" onclick="Views._filterEntries(this,'definition')">definitions</button>
+          <button class="nb-ptab" onclick="Views._filterEntries(this,'snippet')">snippets</button>
+          <button class="nb-ptab" onclick="Views._filterEntries(this,'concept')">concepts</button>
+        </div>
+        <div id="entries-container" class="nb-page-body">
+          <div style="padding:32px;text-align:center;color:var(--text-3);font-family:var(--font-mono);font-size:.8rem">Loading entries...</div>
+        </div>
+      </div>
+    </div>
+  `);
+
+  /* Fetch entries in background */
   const { data: entries } = await DB.getEntries(nb.id);
   Views._currentEntries = entries || [];
   Views._currentNb = nb;
   Views._entryRegistry = {};
+  Views._nbPages = {};
   (entries || []).forEach(e => { Views._entryRegistry[e.id] = e; });
 
-  UI.renderMain(`
-    <div style="margin-bottom:8px">
-      <button class="btn btn-ghost btn-sm" onclick="Views.notebooks()">← back to notebooks</button>
-    </div>
-
-    <div class="notebook-page" style="position:relative;margin-bottom:28px">
-      <div style="position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--accent);border-radius:12px 0 0 12px;"></div>
-      <div class="notebook-page-header" style="padding-left:22px">
-        <div>
-          <div style="font-family:var(--font-mono);font-size:.7rem;color:var(--accent);margin-bottom:2px">~/notebooks/${esc(nb.title)}</div>
-          <h1 style="font-family:var(--font-display);font-size:1.6rem;font-weight:300;color:var(--text)">${esc(nb.title)}</h1>
-          ${nb.description ? `<p style="font-size:.9rem;color:var(--text-2);margin-top:6px">${esc(nb.description)}</p>` : ''}
-        </div>
-        <button class="btn btn-primary btn-sm" onclick="Modals.entry('${nb.id}')">+ Add Entry</button>
-      </div>
-    </div>
-
-    <div class="page-tabs">
-      <button class="ptab active" data-ptab="all" onclick="Views._filterEntries(this,'all')">all (${(entries||[]).length})</button>
-      <button class="ptab" data-ptab="note" onclick="Views._filterEntries(this,'note')">notes</button>
-      <button class="ptab" data-ptab="command" onclick="Views._filterEntries(this,'command')">commands</button>
-      <button class="ptab" data-ptab="definition" onclick="Views._filterEntries(this,'definition')">definitions</button>
-      <button class="ptab" data-ptab="snippet" onclick="Views._filterEntries(this,'snippet')">snippets</button>
-    </div>
-
-    <div id="entries-container" class="card-list">
-      ${Views._renderEntries(entries || [])}
-    </div>
-  `);
+  const container = document.getElementById('entries-container');
+  if (container) container.innerHTML = Views._renderGrouped(entries || [], color);
 };
 
-Views._renderEntries = function(entries) {
-  if (!entries.length) return UI.empty('_', 'No entries yet', 'Add notes, commands, or definitions to this notebook.', '', '');
-  const typeColors = { note:'badge-blue', command:'badge-green', definition:'badge-amber', snippet:'badge-purple', concept:'badge-gray' };
-  return entries.map(e => {
+/* ─── Section constants ─── */
+const NB_ORDER  = ['note','command','definition','snippet','concept'];
+const NB_LABELS = { note:'Notes', command:'Commands', definition:'Definitions', snippet:'Snippets', concept:'Concepts' };
+const NB_TC = {
+  note:       { fg:'var(--blue)',   dot:'#4da9ff' },
+  command:    { fg:'var(--accent)', dot:'#00c896' },
+  definition: { fg:'var(--amber)',  dot:'#f5a623' },
+  snippet:    { fg:'var(--purple)', dot:'#b48eff' },
+  concept:    { fg:'var(--text-3)', dot:'#64748b' },
+};
+
+/* ─── Render entries grouped + paginated ─── */
+Views._renderGrouped = function(entries) {
+  if (!entries.length) return `
+    <div class="nb-empty">
+      <div class="nb-empty-icon">_</div>
+      <div class="nb-empty-title">No entries yet</div>
+      <div class="nb-empty-sub">Hit "+ Add Entry" to fill this notebook.</div>
+    </div>`;
+
+  const groups = {};
+  entries.forEach(e => {
+    const t = NB_ORDER.includes(e.type) ? e.type : 'concept';
+    if (!groups[t]) groups[t] = [];
+    groups[t].push(e);
+  });
+
+  return NB_ORDER
+    .filter(t => groups[t]?.length)
+    .map(type => {
+      const tc = NB_TC[type];
+      const all = groups[type];
+      const page = Views._nbPages[type] || 0;
+      const totalPages = Math.ceil(all.length / NB_PAGE_SIZE);
+      const pageItems = all.slice(page * NB_PAGE_SIZE, (page + 1) * NB_PAGE_SIZE);
+
+      return `
+        <div class="nb-section" data-section="${type}">
+          <div class="nb-section-heading">
+            <div class="nb-section-line" style="background:${tc.dot}"></div>
+            <span class="nb-section-label" style="color:${tc.dot}">${NB_LABELS[type]}</span>
+            <span class="nb-section-count">${all.length}</span>
+          </div>
+          <div class="nb-section-entries" id="nb-entries-${type}">
+            ${Views._renderEntryItems(pageItems, tc)}
+          </div>
+          ${totalPages > 1 ? `
+            <div class="nb-pagination">
+              <button class="nb-page-btn" onclick="Views._nbChangePage('${type}',-1)" ${page===0?'disabled':''}>← prev</button>
+              <span class="nb-page-info">${page+1} / ${totalPages}</span>
+              <button class="nb-page-btn" onclick="Views._nbChangePage('${type}',1)" ${page>=totalPages-1?'disabled':''}>next →</button>
+            </div>
+          ` : ''}
+        </div>`;
+    }).join('');
+};
+
+Views._renderEntryItems = function(items, tc) {
+  return items.map(e => {
     Views._entryRegistry[e.id] = e;
     return `
-      <div class="card" data-entry-type="${esc(e.type)}">
-        <div class="card-header">
-          <span class="badge ${typeColors[e.type]||'badge-gray'}">${esc(e.type)}</span>
-          <span class="card-title" style="font-size:.95rem">${esc(e.title)}</span>
-          <div style="display:flex;gap:4px;margin-left:auto">
-            <button class="btn-icon" onclick="Views._editEntry('${e.id}')" title="Edit">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            </button>
-            <button class="btn-icon red" onclick="Views._confirmDeleteEntry('${e.id}')" title="Delete">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-            </button>
+      <div class="nb-entry" data-entry-type="${esc(e.type)}">
+        <div class="nb-entry-dot" style="background:${tc.dot}"></div>
+        <div class="nb-entry-body">
+          <div class="nb-entry-header">
+            <span class="nb-entry-title">${esc(e.title)}</span>
+            <div class="nb-entry-actions">
+              <button class="btn-icon" onclick="Views._editEntry('${e.id}')">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+              <button class="btn-icon red" onclick="Views._confirmDeleteEntry('${e.id}')">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+              </button>
+            </div>
           </div>
-        </div>
-        <div class="card-body">
-          ${e.content ? `<p style="font-size:.9rem;color:var(--text-2);line-height:1.65;white-space:pre-wrap;margin-bottom:${e.code?'10px':'0'}">${esc(e.content)}</p>` : ''}
+          ${e.content ? `<p class="nb-entry-content">${esc(e.content)}</p>` : ''}
           ${e.code ? `
-            <div class="cmd-block">
+            <div class="cmd-block" style="margin-top:10px">
               <div class="cmd-block-bar">
                 <div class="cmd-dots"><span></span><span></span><span></span></div>
                 <button class="btn-copy" onclick="copyCmd(this,${JSON.stringify(e.code)})">copy</button>
               </div>
               <div class="cmd-code" style="white-space:pre-wrap;overflow-x:auto"><span class="cmd-prompt">$</span>${esc(e.code)}</div>
-            </div>
-          ` : ''}
+            </div>` : ''}
           ${e.tags?.length ? `<div class="tags" style="margin-top:10px">${e.tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}
-          <div style="margin-top:8px;font-family:var(--font-mono);font-size:.7rem;color:var(--text-3)">${reltime(e.created_at)}</div>
+          <div class="nb-entry-time">${reltime(e.created_at)}</div>
         </div>
-      </div>
-    `;
+      </div>`;
   }).join('');
+};
+
+Views._nbChangePage = function(type, dir) {
+  const tc = NB_TC[type];
+  if (!tc) return;
+  const allOfType = Views._currentEntries.filter(e => (NB_ORDER.includes(e.type) ? e.type : 'concept') === type);
+  const totalPages = Math.ceil(allOfType.length / NB_PAGE_SIZE);
+  const cur = Views._nbPages[type] || 0;
+  const next = Math.max(0, Math.min(totalPages - 1, cur + dir));
+  Views._nbPages[type] = next;
+  /* Re-render just this section's entries + pagination */
+  const el = document.getElementById('nb-entries-' + type);
+  if (!el) return;
+  const pageItems = allOfType.slice(next * NB_PAGE_SIZE, (next + 1) * NB_PAGE_SIZE);
+  el.innerHTML = Views._renderEntryItems(pageItems, tc);
+  /* Update pagination controls */
+  const section = el.closest('.nb-section');
+  if (!section) return;
+  const pag = section.querySelector('.nb-pagination');
+  if (pag) {
+    pag.querySelector('.nb-page-info').textContent = `${next+1} / ${totalPages}`;
+    pag.querySelectorAll('.nb-page-btn')[0].disabled = next === 0;
+    pag.querySelectorAll('.nb-page-btn')[1].disabled = next >= totalPages - 1;
+  }
+};
+
+Views._renderEntries = function(entries) { return Views._renderGrouped(entries); };
+
+Views._filterEntries = function(btn, type) {
+  document.querySelectorAll('.nb-ptab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  Views._nbPages = {};
+  const filtered = type === 'all' ? Views._currentEntries : Views._currentEntries.filter(e => e.type === type);
+  const el = document.getElementById('entries-container');
+  if (el) el.innerHTML = Views._renderGrouped(filtered);
 };
 
 Views._editEntry = function(id) {
   const e = Views._entryRegistry[id];
-  const nb = Views._currentNb;
-  if (e && nb) Modals.entry(nb.id, e);
+  if (e && Views._currentNb) Modals.entry(Views._currentNb.id, e);
 };
-
 Views._confirmDeleteEntry = function(id) {
   const e = Views._entryRegistry[id];
   if (e) Modals.confirmDelete(e.title, () => Views._deleteEntry(id));
 };
-
-Views._filterEntries = function(btn, type) {
-  document.querySelectorAll('.ptab').forEach(t => t.classList.remove('active'));
-  btn.classList.add('active');
-  const filtered = type === 'all'
-    ? Views._currentEntries
-    : Views._currentEntries.filter(e => e.type === type);
-  document.getElementById('entries-container').innerHTML = Views._renderEntries(filtered);
-};
-
 Views._deleteNotebook = async function(id) {
   await db.from('entries').delete().eq('notebook_id', id);
   const { error } = await DB.deleteNotebook(id);
@@ -192,12 +268,12 @@ Views._deleteNotebook = async function(id) {
   toast('Notebook deleted');
   Views.notebooks();
 };
-
 Views._deleteEntry = async function(id) {
   const { error } = await DB.deleteEntry(id);
   if (error) { toast(error.message, 'error'); return; }
   toast('Entry deleted');
   delete Views._entryRegistry[id];
   Views._currentEntries = Views._currentEntries.filter(e => e.id !== id);
-  document.getElementById('entries-container').innerHTML = Views._renderEntries(Views._currentEntries);
+  const el = document.getElementById('entries-container');
+  if (el) el.innerHTML = Views._renderGrouped(Views._currentEntries);
 };
