@@ -24,13 +24,14 @@ const Search = {
 
     const results = await DB.searchAll(query);
     const items = [
-      ...results.notebooks.map(r => ({ type: 'notebook', icon: '📓', ...r })),
-      ...results.commands.map(r  => ({ type: 'command',  icon: '$_',  ...r })),
-      ...results.ideas.map(r    => ({ type: 'idea',     icon: '💡',  ...r })),
-      ...results.projects.map(r => ({ type: 'project',  icon: '🚀',  ...r })),
+      ...results.users.map(r    => ({ type: 'user', ...r })),
+      ...results.notebooks.map(r => ({ type: 'notebook', ...r })),
+      ...results.commands.map(r  => ({ type: 'command', ...r })),
+      ...results.ideas.map(r    => ({ type: 'idea', ...r })),
+      ...results.projects.map(r => ({ type: 'project', ...r })),
     ];
 
-    const typeColor = { notebook:'badge-blue', command:'badge-green', idea:'badge-amber', project:'badge-purple' };
+    const typeColor = { user:'badge-purple', notebook:'badge-blue', command:'badge-green', idea:'badge-amber', project:'badge-purple' };
     const typeNav   = { notebook:'notebooks', command:'commands', idea:'ideas', project:'projects' };
 
     if (!items.length) {
@@ -39,10 +40,11 @@ const Search = {
     }
 
     document.getElementById('sm-results').innerHTML = items.map(item => `
-      <div class="sm-result" onclick="Search.close();Router.navigate('${typeNav[item.type]}')">
+      <div class="sm-result" onclick="${item.type === 'user' ? `Search.close();Router.navigate('profile',{userId:'${item.id}'})` : `Search.close();Router.navigate('${typeNav[item.type]}')`}">
         <span class="sm-result-type badge ${typeColor[item.type]||'badge-gray'}">${item.type}</span>
         <div>
-          <div class="sm-result-title">${esc(item.title)}</div>
+          <div class="sm-result-title">${esc(item.type === 'user' ? ('@' + (item.username || 'user')) : item.title)}</div>
+          ${item.type === 'user' && item.full_name ? `<div class="sm-result-sub">${esc(item.full_name)}</div>` : ''}
         </div>
       </div>
     `).join('');

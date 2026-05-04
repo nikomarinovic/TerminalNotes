@@ -43,6 +43,20 @@ const DB = {
       .eq('notebook_id', notebookId).order('created_at', { ascending: false });
     return { data, error };
   },
+  async getPublicEntries(notebookId) {
+    const { data: notebook, error: notebookError } = await db.from('notebooks')
+      .select('id,user_id,is_public')
+      .eq('id', notebookId)
+      .single();
+    if (notebookError || !notebook) return { data: null, error: notebookError || { message: 'Notebook not found' } };
+    if (!notebook.is_public && notebook.user_id !== Auth.user?.id) {
+      return { data: null, error: { message: 'This notebook is private' } };
+    }
+    const { data, error } = await db.from('entries').select('*')
+      .eq('notebook_id', notebookId)
+      .order('created_at', { ascending: false });
+    return { data, error };
+  },
   async createEntry(payload) {
     const { data, error } = await db.from('entries').insert(payload).select().single();
     return { data, error };
@@ -201,10 +215,32 @@ const DB = {
     data.forEach(post => { post.profile = profileMap[post.user_id] || null; });
     return { data, error };
   },
+  async getPostsByUser(userId, { limit = 20, offset = 0 } = {}) {
+    const { data, error } = await db.from('posts')
+      .select('id,user_id,content,image_url,created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+    if (error || !data) return { data, error };
+    const { data: profile } = await db.from('profiles').select('id,username,avatar_url').eq('id', userId).single();
+    data.forEach(post => { post.profile = profile || null; });
+    return { data, error };
+  },
 
   async createPost(payload) {
     const { data, error } = await db.from('posts').insert(payload).select().single();
     return { data, error };
+  },
+  async updatePost(postId, payload) {
+    const { data, error } = await db.from('posts')
+      .update(payload)
+      .eq('id', postId)
+      .select()
+      .single();
+    return { data, error };
+  },
+  async deletePost(postId) {
+    return await db.from('posts').delete().eq('id', postId);
   },
 
   async getPostLikes(postIds = [], userId) {
@@ -287,11 +323,35 @@ const DB = {
     const { data } = db.storage.from('post-images').getPublicUrl(path);
     return { data, error: null };
   },
+  async uploadAvatarImage(userId, file) {
+    const ext = extFromFilename(file?.name || '');
+    const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error } = await db.storage.from('avatars').upload(path, file, { upsert: false });
+    if (error) return { data: null, error };
+    const { data } = db.storage.from('avatars').getPublicUrl(path);
+    return { data, error: null };
+  },
 
   /* ── Profiles ── */
   async getProfile(userId) {
     const { data, error } = await db.from('profiles').select('*').eq('id', userId).single();
     return { data, error };
+  },
+  async getProfilesByIds(ids = []) {
+    if (!ids.length) return { data: [], error: null };
+    const { data, error } = await db.from('profiles').select('*').in('id', ids);
+    return { data, error };
+  },
+  async getUsersByQuery(query, limit = 20) {
+    const q = query.trim();
+    if (!q) return { data: [], error: null };
+    const like = `%${q}%`;
+    const { data, error } = await db.from('profiles')
+      .select('id, username, full_name, avatar_url, bio')
+      .or(`username.ilike.${like},full_name.ilike.${like}`)
+      .order('username', { ascending: true })
+      .limit(limit);
+    return { data: data || [], error };
   },
   async upsertProfile(payload) {
     const { data, error } = await db.from('profiles').upsert(payload).select().single();
@@ -312,6 +372,52 @@ const DB = {
     const { data, error } = await db.from('stars').select('*').eq('user_id', userId);
     return { data, error };
   },
+  async getNotebookSaves(userId) {
+    const { data, error } = await db.from('notebook_saves')
+      .select('notebook_id,created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    if (error || !data) {
+      const starsFallback = await this.getStars(userId);
+      const rows = (starsFallback.data || []).filter(s => s.item_type === 'notebook');
+      return { data: rows.map(r => ({ notebook_id: r.item_id, created_at: r.created_at })), error: null };
+    }
+    return { data, error };
+  },
+  async saveNotebook(userId, notebookId) {
+    const { data, error } = await db.from('notebook_saves')
+      .insert({ user_id: userId, notebook_id: notebookId })
+      .select()
+      .single();
+    if (error) {
+      await this.starItem(userId, 'notebook', notebookId);
+      return { data: { user_id: userId, notebook_id: notebookId }, error: null };
+    }
+    return { data, error };
+  },
+  async unsaveNotebook(userId, notebookId) {
+    const { error } = await db.from('notebook_saves')
+      .delete()
+      .eq('user_id', userId)
+      .eq('notebook_id', notebookId);
+    if (error) {
+      return await this.unstarItem(userId, 'notebook', notebookId);
+    }
+    return { error: null };
+  },
+  async isNotebookSaved(userId, notebookId) {
+    const { data, error } = await db.from('notebook_saves')
+      .select('notebook_id')
+      .eq('user_id', userId)
+      .eq('notebook_id', notebookId)
+      .maybeSingle();
+    if (error) {
+      const stars = await this.getStars(userId);
+      const found = (stars.data || []).some(s => s.item_type === 'notebook' && s.item_id === notebookId);
+      return { data: found, error: null };
+    }
+    return { data: !!data, error: null };
+  },
 
   /* ── Follows ── */
   async follow(followerId, followingId) {
@@ -323,21 +429,109 @@ const DB = {
     return await db.from('follows')
       .delete().eq('follower_id', followerId).eq('following_id', followingId);
   },
+  async createFollowRequest(requesterId, targetId) {
+    const { data, error } = await db.from('follow_requests')
+      .insert({ requester_id: requesterId, target_id: targetId, status: 'pending' })
+      .select()
+      .single();
+    if (error) return { data: null, error };
+    return { data, error: null };
+  },
+  async getIncomingFollowRequests(userId) {
+    const { data, error } = await db.from('follow_requests')
+      .select('id, requester_id, status, created_at')
+      .eq('target_id', userId)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+    if (error || !data) return { data: [], error };
+    const ids = data.map(row => row.requester_id);
+    const { data: profiles } = await this.getProfilesByIds(ids);
+    const profileMap = {};
+    (profiles || []).forEach(p => { profileMap[p.id] = p; });
+    return { data: data.map(row => ({ ...row, profile: profileMap[row.requester_id] || null })), error: null };
+  },
+  async respondFollowRequest(requestId, action) {
+    const nextStatus = action === 'accept' ? 'accepted' : 'rejected';
+    const { data: req, error: getErr } = await db.from('follow_requests')
+      .select('id,requester_id,target_id,status')
+      .eq('id', requestId)
+      .single();
+    if (getErr || !req) return { error: getErr || { message: 'Request not found' } };
+    const { error } = await db.from('follow_requests')
+      .update({ status: nextStatus })
+      .eq('id', requestId);
+    if (error) return { error };
+    if (nextStatus === 'accepted') {
+      await this.follow(req.requester_id, req.target_id);
+    }
+    return { error: null };
+  },
+  async getFollowers(userId) {
+    const { data, error } = await db.from('follows')
+      .select('follower_id, created_at')
+      .eq('following_id', userId)
+      .order('created_at', { ascending: false });
+    if (error || !data) return { data, error };
+    const ids = data.map(row => row.follower_id);
+    const { data: profiles } = await this.getProfilesByIds(ids);
+    const profileMap = {};
+    (profiles || []).forEach(p => { profileMap[p.id] = p; });
+    return { data: data.map(row => ({ ...row, profile: profileMap[row.follower_id] || null })), error: null };
+  },
+  async getFollowing(userId) {
+    const { data, error } = await db.from('follows')
+      .select('following_id, created_at')
+      .eq('follower_id', userId)
+      .order('created_at', { ascending: false });
+    if (error || !data) return { data, error };
+    const ids = data.map(row => row.following_id);
+    const { data: profiles } = await this.getProfilesByIds(ids);
+    const profileMap = {};
+    (profiles || []).forEach(p => { profileMap[p.id] = p; });
+    return { data: data.map(row => ({ ...row, profile: profileMap[row.following_id] || null })), error: null };
+  },
+  async isFollowing(followerId, followingId) {
+    const { data, error } = await db.from('follows')
+      .select('follower_id')
+      .eq('follower_id', followerId)
+      .eq('following_id', followingId)
+      .maybeSingle();
+    return { data: !!data, error };
+  },
+  async getFollowCounts(userId) {
+    const [{ count: followersCount }, { count: followingCount }] = await Promise.all([
+      db.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', userId),
+      db.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', userId)
+    ]);
+    return { followers: followersCount || 0, following: followingCount || 0 };
+  },
+  async getFriends(userId) {
+    const [{ data: followers }, { data: following }] = await Promise.all([
+      db.from('follows').select('follower_id').eq('following_id', userId),
+      db.from('follows').select('following_id').eq('follower_id', userId)
+    ]);
+    const followerSet = new Set((followers || []).map(r => r.follower_id));
+    const friendIds = (following || []).map(r => r.following_id).filter(id => followerSet.has(id));
+    const { data: profiles } = await this.getProfilesByIds(friendIds);
+    return { data: profiles || [], error: null };
+  },
 
   /* ── Search (uses Postgres ilike) ── */
   async searchAll(query) {
     const q = `%${query}%`;
-    const [nb, cmd, idea, proj] = await Promise.all([
+    const [nb, cmd, idea, proj, users] = await Promise.all([
       db.from('notebooks').select('id,title,user_id').ilike('title', q).limit(5),
       db.from('commands').select('id,title,user_id').ilike('title', q).limit(5),
       db.from('ideas').select('id,title,user_id').ilike('title', q).limit(5),
       db.from('projects').select('id,title,user_id').ilike('title', q).limit(5),
+      db.from('profiles').select('id,username,full_name,avatar_url').or(`username.ilike.${q},full_name.ilike.${q}`).limit(8),
     ]);
     return {
       notebooks: nb.data || [],
       commands:  cmd.data || [],
       ideas:     idea.data || [],
       projects:  proj.data || [],
+      users:     users.data || [],
     };
   },
 

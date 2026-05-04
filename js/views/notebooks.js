@@ -33,7 +33,7 @@ Views.notebooks = async function() {
       <button class="btn btn-primary" onclick="Modals.notebook()">+ New Notebook</button>
     </div>
     ${!notebooks?.length
-      ? UI.empty('📓', 'No notebooks yet', 'Create your first notebook.', '+ New Notebook', 'Modals.notebook()')
+      ? UI.empty(Icons.svg('notebook','ui-icon'), 'No notebooks yet', 'Create your first notebook.', 'New Notebook', 'Modals.notebook()')
       : `<div class="nb-grid">${notebooks.map(nb => Views._notebookCard(nb)).join('')}</div>`
     }
   `);
@@ -98,7 +98,10 @@ Views._openNotebook = async function(idOrObj) {
             <h1 class="nb-page-heading">${esc(nb.title)}</h1>
             ${nb.description ? `<p class="nb-page-subheading">${esc(nb.description)}</p>` : ''}
           </div>
-          <button class="btn btn-primary btn-sm" onclick="Modals.entry('${nb.id}')">+ Add Entry</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            ${nb.user_id === Auth.user.id ? `<button class="btn btn-primary btn-sm" onclick="Modals.entry('${nb.id}')">Add Entry</button>` : ''}
+            ${nb.is_public && nb.user_id !== Auth.user.id ? `<button class="btn btn-secondary btn-sm" onclick="Views._toggleNotebookSave('${nb.id}')">Save Notebook</button>` : ''}
+          </div>
         </div>
         <div class="nb-page-tabs">
           <button class="nb-ptab active" onclick="Views._filterEntries(this,'all')">all</button>
@@ -116,7 +119,11 @@ Views._openNotebook = async function(idOrObj) {
   `);
 
   /* Fetch entries in background */
-  const { data: entries } = await DB.getEntries(nb.id);
+  const { data: entries, error: entriesErr } = await (nb.user_id === Auth.user.id ? DB.getEntries(nb.id) : DB.getPublicEntries(nb.id));
+  if (entriesErr) {
+    toast(entriesErr.message || 'Unable to load notebook entries', 'error');
+    return;
+  }
   Views._currentEntries = entries || [];
   Views._currentNb = nb;
   Views._entryRegistry = {};
@@ -177,7 +184,7 @@ Views._renderGrouped = function(entries) {
             <div class="nb-pagination">
               <button class="nb-page-btn" onclick="Views._nbChangePage('${type}',-1)" ${page===0?'disabled':''}>← prev</button>
               <span class="nb-page-info">${page+1} / ${totalPages}</span>
-              <button class="nb-page-btn" onclick="Views._nbChangePage('${type}',1)" ${page>=totalPages-1?'disabled':''}>next →</button>
+              <button class="nb-page-btn" onclick="Views._nbChangePage('${type}',1)" ${page>=totalPages-1?'disabled':''}>next</button>
             </div>
           ` : ''}
         </div>`;

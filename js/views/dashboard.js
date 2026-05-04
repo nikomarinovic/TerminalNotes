@@ -7,9 +7,11 @@ Views._dashCmdRegistry = {};
 
 Views.dashboard = async function() {
   const uid = Auth.user.id;
-  const [nb, cmd, ideas, proj] = await Promise.all([
+  const [nb, cmd, ideas, proj, postsRes, savesRes] = await Promise.all([
     DB.getNotebooks(uid), DB.getCommands(uid),
     DB.getIdeas(uid),     DB.getProjects(uid),
+    DB.getPostsByUser(uid, { limit: 6, offset: 0 }),
+    DB.getNotebookSaves(uid),
   ]);
 
   /* Populate registries */
@@ -17,6 +19,15 @@ Views.dashboard = async function() {
   Views._dashCmdRegistry = {};
   (nb.data || []).forEach(n => { Views._nbRegistry[n.id] = n; });
   (cmd.data || []).forEach(c => { Views._dashCmdRegistry[c.id] = c; });
+  const myPosts = postsRes.data || [];
+  const savedNotebookIds = (savesRes.data || []).map(s => s.notebook_id);
+  let savedNotebooks = [];
+  if (savedNotebookIds.length) {
+    const { data } = await db.from('notebooks')
+      .select('id,title,description,user_id,is_public,created_at')
+      .in('id', savedNotebookIds);
+    savedNotebooks = (data || []);
+  }
 
   const username = Auth.profile?.username || 'dev';
   const hour = new Date().getHours();
@@ -120,6 +131,42 @@ Views.dashboard = async function() {
             </div>
           </div>
         `).join('') || '<p style="color:var(--text-3);font-size:.85rem">No commands saved yet.</p>'}
+      </div>
+    </div>
+
+    <div style="margin-top:28px">
+      <div class="section-row">
+        <div class="section-row-title">// my posts</div>
+        <button class="btn btn-ghost btn-sm" onclick="Router.navigate('feed')">open feed</button>
+      </div>
+      <div class="card-list">
+        ${myPosts.map(post => `
+          <div class="feed-item">
+            <div class="feed-action">${renderRichText(post.content || '')}</div>
+            ${post.image_url ? `<img src="${esc(post.image_url)}" class="feed-image" alt="post image"/>` : ''}
+            <div class="feed-actions">
+              <button class="feed-btn" onclick="Views._editPost('${post.id}')">${Icons.svg('edit','ui-icon')} edit</button>
+              <button class="feed-btn" onclick="Views._confirmDeletePost('${post.id}')">${Icons.svg('trash','ui-icon')} delete</button>
+            </div>
+          </div>
+        `).join('') || '<div class="card"><div class="card-body" style="padding:20px;text-align:center;color:var(--text-3);font-size:.85rem">No posts yet</div></div>'}
+      </div>
+    </div>
+
+    <div style="margin-top:28px">
+      <div class="section-row">
+        <div class="section-row-title">// saved notebooks</div>
+      </div>
+      <div class="card-list">
+        ${savedNotebooks.map(n => `
+          <div class="card" style="cursor:pointer" onclick="Views._openNotebook('${n.id}')">
+            <div class="card-header">
+              <span class="card-title">${Icons.svg('notebook','ui-icon')} ${esc(n.title)}</span>
+              <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();Views._toggleNotebookSave('${n.id}')">unsave</button>
+            </div>
+            ${n.description ? `<div class="card-body"><p style="font-size:.85rem;color:var(--text-2)">${esc(n.description)}</p></div>` : ''}
+          </div>
+        `).join('') || '<div class="card"><div class="card-body" style="padding:20px;text-align:center;color:var(--text-3);font-size:.85rem">No saved notebooks yet</div></div>'}
       </div>
     </div>
   `);

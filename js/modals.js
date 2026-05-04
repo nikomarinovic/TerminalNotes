@@ -23,7 +23,7 @@ const Modals = {
         <div class="modal modal-sm">
           <div class="modal-head">
             <span class="modal-title">// confirm delete</span>
-            <button class="modal-close-btn" onclick="Modals.close()">✕</button>
+            <button class="modal-close-btn" onclick="Modals.close()">${Icons.svg('close','ui-icon')}</button>
           </div>
           <div class="modal-body">
             <p style="font-size:.9rem;color:var(--text-2);line-height:1.6;">
@@ -68,7 +68,7 @@ const Modals = {
         <div class="modal">
           <div class="modal-head">
             <span class="modal-title">${isEdit ? '// edit notebook' : '// new notebook'}</span>
-            <button class="modal-close-btn" onclick="Modals.close()">✕</button>
+            <button class="modal-close-btn" onclick="Modals.close()">${Icons.svg('close','ui-icon')}</button>
           </div>
           <div class="modal-body">
             <div class="form-group">
@@ -132,7 +132,7 @@ const Modals = {
         <div class="modal modal-lg">
           <div class="modal-head">
             <span class="modal-title">${isEdit ? '// edit entry' : '// new entry'}</span>
-            <button class="modal-close-btn" onclick="Modals.close()">✕</button>
+            <button class="modal-close-btn" onclick="Modals.close()">${Icons.svg('close','ui-icon')}</button>
           </div>
           <div class="modal-body">
             <div class="form-group">
@@ -212,7 +212,7 @@ const Modals = {
         <div class="modal">
           <div class="modal-head">
             <span class="modal-title">${isEdit ? '// edit command' : '// new command'}</span>
-            <button class="modal-close-btn" onclick="Modals.close()">✕</button>
+            <button class="modal-close-btn" onclick="Modals.close()">${Icons.svg('close','ui-icon')}</button>
           </div>
           <div class="modal-body">
             <div class="form-group">
@@ -273,7 +273,7 @@ const Modals = {
         <div class="modal">
           <div class="modal-head">
             <span class="modal-title">${isEdit ? '// edit idea' : '// new idea'}</span>
-            <button class="modal-close-btn" onclick="Modals.close()">✕</button>
+            <button class="modal-close-btn" onclick="Modals.close()">${Icons.svg('close','ui-icon')}</button>
           </div>
           <div class="modal-body">
             <div class="form-group">
@@ -341,7 +341,7 @@ const Modals = {
         <div class="modal">
           <div class="modal-head">
             <span class="modal-title">// promote idea → project</span>
-            <button class="modal-close-btn" onclick="Modals.close()">✕</button>
+            <button class="modal-close-btn" onclick="Modals.close()">${Icons.svg('close','ui-icon')}</button>
           </div>
           <div class="modal-body">
             <div class="form-group">
@@ -362,7 +362,7 @@ const Modals = {
           </div>
           <div class="modal-foot">
             <button class="btn btn-ghost" onclick="Modals.close()">cancel</button>
-            <button id="btn-promote" class="btn btn-primary">🚀 create project</button>
+            <button id="btn-promote" class="btn btn-primary">${Icons.svg('project','ui-icon')} create project</button>
           </div>
         </div>
       </div>
@@ -382,7 +382,7 @@ const Modals = {
       // Mark idea as converted
       await DB.updateIdea(idea.id, { status: 'building', converted_to_project: true });
       Modals.close();
-      toast('Project created from idea! 🚀');
+      toast('Project created from idea!');
       Views.projects();
     });
   },
@@ -395,7 +395,7 @@ const Modals = {
         <div class="modal modal-lg">
           <div class="modal-head">
             <span class="modal-title">${isEdit ? '// edit project' : '// new project'}</span>
-            <button class="modal-close-btn" onclick="Modals.close()">✕</button>
+            <button class="modal-close-btn" onclick="Modals.close()">${Icons.svg('close','ui-icon')}</button>
           </div>
           <div class="modal-body">
             <div class="form-group">
@@ -464,7 +464,7 @@ const Modals = {
         <div class="modal modal-sm">
           <div class="modal-head">
             <span class="modal-title">// add milestone</span>
-            <button class="modal-close-btn" onclick="Modals.close()">✕</button>
+            <button class="modal-close-btn" onclick="Modals.close()">${Icons.svg('close','ui-icon')}</button>
           </div>
           <div class="modal-body">
             <div class="form-group">

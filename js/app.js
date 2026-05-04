@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const btn = document.getElementById('btn-login');
     btn.textContent = '...'; btn.disabled = true;
     const err = await Auth.loginEmail(email, pass);
-    btn.textContent = '→ login'; btn.disabled = false;
+    btn.textContent = 'Sign in'; btn.disabled = false;
     if (err) showAuthErr('l-err', err.message);
   });
   document.getElementById('l-pass')?.addEventListener('keydown', e => {
@@ -61,7 +61,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const btn = document.getElementById('btn-signup');
     btn.textContent = '...'; btn.disabled = true;
     const err = await Auth.signupEmail(email, pass);
-    btn.textContent = '→ create account'; btn.disabled = false;
+    btn.textContent = 'Create account'; btn.disabled = false;
     if (err) showAuthErr('s-err', err.message);
     else {
       document.getElementById('auth-overlay').classList.add('hidden');

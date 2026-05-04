@@ -119,7 +119,7 @@ Views._renderCommandsPage = function() {
     <div class="nb-pagination">
       <button class="nb-page-btn" onclick="Views._changeCmdPage(-1)" ${page === 0 ? 'disabled' : ''}>← prethodna stranica</button>
       <span class="nb-page-info">${page + 1} / ${totalPages}</span>
-      <button class="nb-page-btn" onclick="Views._changeCmdPage(1)" ${page >= totalPages - 1 ? 'disabled' : ''}>sljedeća stranica →</button>
+      <button class="nb-page-btn" onclick="Views._changeCmdPage(1)" ${page >= totalPages - 1 ? 'disabled' : ''}>next</button>
     </div>
   `;
 };

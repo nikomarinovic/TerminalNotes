@@ -48,7 +48,7 @@ Views._ideaCard = function(i) {
   return `
     <div class="card idea-card" data-status="${esc(i.status)}" style="display:flex;flex-direction:column">
       <div class="card-header">
-        <span style="font-size:1.2rem">${statusEmoji[i.status]||'💡'}</span>
+        <span style="font-size:1.2rem">${statusEmoji[i.status] || Icons.svg('idea','ui-icon')}</span>
         <span class="card-title">${esc(i.title)}</span>
         <div style="display:flex;gap:5px;margin-left:auto">
           ${i.is_public ? '<span class="badge badge-green">public</span>' : ''}
@@ -73,7 +73,7 @@ Views._ideaCard = function(i) {
           <div style="display:flex;gap:6px">
             ${!i.converted_to_project ? `
               <button class="btn btn-sm btn-secondary" onclick="Views._promoteIdea('${i.id}')">
-                🚀 → Project
+                ${Icons.svg('project','ui-icon')} Create Project
               </button>
             ` : '<span class="badge badge-purple">converted</span>'}
           </div>

@@ -5,6 +5,7 @@ const Auth = {
   user: null,
   profile: null,
   githubToken: null,
+  githubAvatarUrl: '',
 
   async init() {
     const { data: { session } } = await db.auth.getSession();
@@ -26,11 +27,12 @@ const Auth = {
   async _onSession(session) {
     Auth.user = session.user;
     Auth.githubToken = session.provider_token || null;
+    const meta = Auth.user.user_metadata || {};
+    Auth.githubAvatarUrl = meta.avatar_url || '';
 
     // Upsert profile
     const { data: profile } = await DB.getProfile(Auth.user.id);
     if (!profile) {
-      const meta = Auth.user.user_metadata || {};
       await DB.upsertProfile({
         id: Auth.user.id,
         username: meta.user_name || meta.full_name || Auth.user.email?.split('@')[0] || 'user',
@@ -41,6 +43,17 @@ const Auth = {
       Auth.profile = (await DB.getProfile(Auth.user.id)).data;
     } else {
       Auth.profile = profile;
+      const provider = Auth.user.app_metadata?.provider;
+      if (provider === 'github' && Auth.githubAvatarUrl && !Auth.profile.avatar_url) {
+        const { data: synced } = await DB.upsertProfile({
+          id: Auth.user.id,
+          username: Auth.profile.username,
+          full_name: Auth.profile.full_name,
+          bio: Auth.profile.bio,
+          avatar_url: Auth.githubAvatarUrl,
+        });
+        if (synced) Auth.profile = synced;
+      }
     }
     UI.updateUserDisplay();
   },
