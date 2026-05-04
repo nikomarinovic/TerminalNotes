@@ -151,7 +151,7 @@ create table if not exists public.feed_events (
 create table if not exists public.posts (
   id         uuid primary key default gen_random_uuid(),
   user_id    uuid not null references auth.users(id) on delete cascade,
-  content    text not null check (char_length(content) > 0 and char_length(content) <= 500),
+  content    text not null check (char_length(content) > 0 and char_length(content) <= 1000),
   image_url  text,
   created_at timestamptz default now()
 );

@@ -32,7 +32,7 @@ Views.feed = async function() {
             <button class="btn btn-ghost btn-sm" onclick="Views._feedApplyFormat('bold')"><strong>B</strong></button>
             <button class="btn btn-ghost btn-sm" onclick="Views._feedApplyFormat('link')">Link</button>
           </div>
-          <textarea id="feed-post-content" class="form-input" rows="3" maxlength="500" placeholder="Share something useful for developers..."></textarea>
+          <textarea id="feed-post-content" class="form-input feed-post-textarea" rows="6" maxlength="1000" placeholder="Share something useful for developers..."></textarea>
         </div>
         <div class="form-group" style="margin-top:8px">
           <label class="form-label">$ image</label>
@@ -373,7 +373,7 @@ Views._editPost = async function(postId) {
         <div class="modal-body">
           <div class="form-group">
             <label class="form-label">$ content</label>
-            <textarea id="edit-post-content" class="form-input" rows="4" maxlength="500">${esc(post.content || '')}</textarea>
+            <textarea id="edit-post-content" class="form-input" rows="4" maxlength="1000">${esc(post.content || '')}</textarea>
           </div>
         </div>
         <div class="modal-foot">
